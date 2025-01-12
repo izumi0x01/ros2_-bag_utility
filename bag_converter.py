@@ -1,6 +1,6 @@
+import os
 import sqlite3
 import message_converter
-import os
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from rclpy.serialization import deserialize_message
