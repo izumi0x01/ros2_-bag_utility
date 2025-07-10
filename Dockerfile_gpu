@@ -1,0 +1,57 @@
+FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Tokyo
+ENV LIBRARY_PATH /usr/local/cuda/lib64/stubs
+
+ARG UID GID LOCAL_USERNAME LOCAL_GROUPNAME PASSWORD PORT
+
+# パッケージアップデート
+RUN apt-get update -y && apt-get upgrade -y
+
+# ユーザー追加
+RUN groupadd -g $GID $LOCAL_GROUPNAME && \
+    useradd -m -u $UID -g $GID $LOCAL_USERNAME && \
+    echo "$LOCAL_USERNAME:$PASSWORD" | chpasswd
+
+# 基本ツール & GUI & ROS 必須パッケージ
+RUN apt-get install -y \
+    git python3.9 python3-pip vim curl x11-apps locales \
+    gnupg lsb-release sudo
+
+# Jupyter + Python ライブラリ
+COPY requirements.txt /tmp/requirements.txt
+RUN pip3 install --upgrade pip setuptools && \
+    pip3 install --no-cache-dir \
+    black \
+    jupyterlab \
+    jupyterlab-lsp \
+    'python-lsp-server[all]' \
+    lckr-jupyterlab-variableinspector \
+    jupyterlab_code_formatter \
+    jupyterlab-git \
+    jupyterlab_widgets \
+    ipywidgets \
+    import-ipynb && \
+    pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# ROS 2 Humble インストール
+RUN locale-gen en_US en_US.UTF-8 && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+ENV LANG en_US.UTF-8
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | apt-key add -
+RUN echo "deb http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list
+RUN apt-get update && apt-get install -y ros-humble-desktop
+RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc
+
+# keychain インストール
+RUN apt update
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+ && apt-get install -y keychain nodejs 
+
+ARG SSH_KEY
+RUN echo 'eval $(keychain --eval --agents ssh $SSH_KEY)' >> ~/.bashrc
+
+USER $LOCAL_USERNAME
+WORKDIR /home/$LOCAL_USERNAME/dev_ws
+RUN mkdir -p ~/.ssh && \
+    ssh-keyscan github.com >> ~/.ssh/known_hosts

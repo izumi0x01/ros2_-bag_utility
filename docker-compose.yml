@@ -1,18 +1,89 @@
-version: "3"
+version: '3'
 services:
-  ros:
+  jupyter:
     build:
       context: .
+      dockerfile: Dockerfile_basic
       args:
         - UID=${UID}
         - GID=${GID}
-        - USERNAME=${USERNAME}
-        - GROUPNAME=${GROUPNAME}
+        - LOCAL_USERNAME=${LOCAL_USERNAME}
+        - LOCAL_GROUPNAME=${LOCAL_GROUPNAME}
         - PASSWORD=${PASSWORD}
-    network_mode: "host"
+        - PORT=${DEFAULT_PORT}
+    user: "${UID}:${GID}"          # ここでUIDとGIDを指定してユーザ切替
+    ipc: host
+    network_mode: host
+    privileged: true
+    init: true
     tty: true
+    ports:
+      - "${DEFAULT_PORT}:${DEFAULT_PORT}"
+    environment:
+      - USERNAME=${LOCAL_USERNAME}
+      - GROUPNAME=${LOCAL_GROUPNAME}
+      - DISPLAY=${DISPLAY}
+      - SHELL=/usr/bin/bash
+      - SSH_AUTH_SOCK=/ssh-agent
+    volumes:
+      - .:/home/${LOCAL_USERNAME}/dev_ws
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - $SSH_AUTH_SOCK:/ssh-agent  # ssh-agentのソケットをコンテナに共有  
+    entrypoint: >
+      jupyter-lab
+      --ip=0.0.0.0
+      --no-browser
+      --allow-root
+      --port=${DEFAULT_PORT}
+      --ServerApp.token='$PASSWORD'
+      --ServerApp.password=''
+      --notebook-dir=/home/${LOCAL_USERNAME}/dev_ws
+      --FileContentsManager.delete_to_trash=False
+
+  jupyter-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile_gpu
+      args:
+        - UID=${UID}
+        - GID=${GID}
+        - LOCAL_USERNAME=${LOCAL_USERNAME}
+        - LOCAL_GROUPNAME=${LOCAL_GROUPNAME}
+        - PASSWORD=${PASSWORD}
+        - PORT=${GPU_PORT}
+    user: "${UID}:${GID}"          # ここでUIDとGIDを指定してユーザ切替
+    ipc: host
+    network_mode: host
+    privileged: true
+    init: true
+    tty: true
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "${GPU_PORT}:${GPU_PORT}"
     environment:
       - DISPLAY=${DISPLAY}
-    working_dir: /workspace
+      - SHELL=/usr/bin/bash
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - SSH_AUTH_SOCK=/ssh-agent
     volumes:
+      - .:/home/${LOCAL_USERNAME}/dev_ws
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - $SSH_AUTH_SOCK:/ssh-agent  # ssh-agentのソケットをコンテナに共有  
+    entrypoint: >
+      jupyter-lab
+      --ip=0.0.0.0
+      --no-browser
+      --allow-root
+      --port=${GPU_PORT}
+      --ServerApp.token='$PASSWORD'
+      --ServerApp.password=''
+      --notebook-dir=/home/${LOCAL_USERNAME}/dev_ws
+      --FileContentsManager.delete_to_trash=False
