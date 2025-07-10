@@ -81,7 +81,6 @@ services:
       --no-browser
       --allow-root
       --port=${GPU_PORT}
-      --ServerApp.token='$PASSWORD'
-      --ServerApp.password=''
+      --ServerApp.token=${PASSWORD}
       --notebook-dir=/home/${LOCAL_USERNAME}/dev_ws
       --FileContentsManager.delete_to_trash=False
