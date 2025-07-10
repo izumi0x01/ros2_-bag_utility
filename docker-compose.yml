@@ -34,8 +34,7 @@ services:
       --no-browser
       --allow-root
       --port=${DEFAULT_PORT}
-      --ServerApp.token=''
-      --ServerApp.password=''
+      --ServerApp.token=${PASSWORD}
       --notebook-dir=/home/${LOCAL_USERNAME}/dev_ws
       --FileContentsManager.delete_to_trash=False"
 

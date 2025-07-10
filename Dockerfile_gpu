@@ -1,57 +1,89 @@
 FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 
+SHELL ["/bin/bash", "-c"]
+
 ENV DEBIAN_FRONTEND=noninteractive
+
+# install apt-utils and necessary packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    locales \
+    tzdata \
+    sudo \
+    x11-apps \
+    curl \
+    vim \
+    python3-pip \
+    openssh-client \
+    keychain \
+    && rm -rf /var/lib/apt/lists/* 
+
+# set timezone to Asia/Tokyo
 ENV TZ=Asia/Tokyo
-ENV LIBRARY_PATH /usr/local/cuda/lib64/stubs
+RUN ln -fs /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
 
-ARG UID GID LOCAL_USERNAME LOCAL_GROUPNAME PASSWORD PORT
+# set locale to Japanese UTF-8
+RUN locale-gen ja_JP.UTF-8 && \
+    update-locale LANG=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8
 
-# パッケージアップデート
-RUN apt-get update -y && apt-get upgrade -y
+# 1. GPGキーを安全に登録
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+# 2. APTソースを正しく登録
+RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu jammy main" > /etc/apt/sources.list.d/ros2-latest.list
+RUN apt-get update && apt-get install -y \
+    ros-humble-ros-base \
+    ros-humble-ros2bag \
+    ros-humble-rosbag2-storage-default-plugins \
+    ros-humble-rqt-py-common \
+    python3-colcon-argcomplete \
+    python3-rosdep
 
-# ユーザー追加
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get update && apt-get install -y --no-install-recommends  \
+    nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# make user as non-root and set up sudo
+ARG UID GID LOCAL_USERNAME LOCAL_GROUPNAME
 RUN groupadd -g $GID $LOCAL_GROUPNAME && \
     useradd -m -u $UID -g $GID $LOCAL_USERNAME && \
-    echo "$LOCAL_USERNAME:$PASSWORD" | chpasswd
+    usermod -aG sudo $LOCAL_USERNAME && \
+    echo "$LOCAL_USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    chmod 0440 /etc/sudoers
 
-# 基本ツール & GUI & ROS 必須パッケージ
-RUN apt-get install -y \
-    git python3.9 python3-pip vim curl x11-apps locales \
-    gnupg lsb-release sudo
 
-# Jupyter + Python ライブラリ
-COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install --upgrade pip setuptools && \
-    pip3 install --no-cache-dir \
-    black \
-    jupyterlab \
-    jupyterlab-lsp \
-    'python-lsp-server[all]' \
-    lckr-jupyterlab-variableinspector \
-    jupyterlab_code_formatter \
-    jupyterlab-git \
-    jupyterlab_widgets \
-    ipywidgets \
-    import-ipynb && \
-    pip3 install --no-cache-dir -r /tmp/requirements.txt
+# Setup workspace and switch to user
+ARG WS=/home/$LOCAL_USERNAME/dev_ws
+RUN mkdir -p $WS/src
 
-# ROS 2 Humble インストール
-RUN locale-gen en_US en_US.UTF-8 && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
-ENV LANG en_US.UTF-8
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | apt-key add -
-RUN echo "deb http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list
-RUN apt-get update && apt-get install -y ros-humble-desktop
-RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc
+# Install starship prompt
+RUN curl -fsSL https://starship.rs/install.sh | sh -s -- --yes
 
-# keychain インストール
-RUN apt update
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
- && apt-get install -y keychain nodejs 
+# Upgrade pip and setuptools
+RUN python3 -m pip install --upgrade pip 'setuptools==58.0.0'
 
-ARG SSH_KEY
+# Setup rosdep and install dependencies
+RUN sudo apt-get update && \
+    if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then sudo rosdep init; fi && \
+    rosdep update && \
+    rosdep install --from-paths $WS/src --rosdistro humble -i -y 
+
+# Copy requirements.txt and install python packages
+COPY requirements.txt /home/$LOCAL_USERNAME/
+RUN pip install --no-cache-dir -r /home/$LOCAL_USERNAME/requirements.txt
+
+# Register Jupyter kernel for ROS Humble Python
+RUN python3 -m ipykernel install --user --name=ros-humble-kernel --display-name "ROS 2 Humble Python"
+
+WORKDIR $WS
+USER $LOCAL_USERNAME:$LOCAL_GROUPNAME
+
+# Setup ssh known_hosts for github
+RUN mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+# bashrc setup
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+RUN echo "eval \$(starship init bash)" >> ~/.bashrc
 RUN echo 'eval $(keychain --eval --agents ssh $SSH_KEY)' >> ~/.bashrc
 
-USER $LOCAL_USERNAME
-WORKDIR /home/$LOCAL_USERNAME/dev_ws
-RUN mkdir -p ~/.ssh && \
-    ssh-keyscan github.com >> ~/.ssh/known_hosts
