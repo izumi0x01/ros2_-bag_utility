@@ -28,7 +28,6 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - $SSH_AUTH_SOCK:/ssh-agent
     entrypoint: >
-      bash -c "source /opt/ros/humble/setup.bash &&
       jupyter lab
       --ip=0.0.0.0
       --no-browser

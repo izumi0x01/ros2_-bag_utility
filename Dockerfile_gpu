@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     locales \
     tzdata \
     sudo \
+    git \
     x11-apps \
     curl \
     vim \
@@ -76,8 +77,11 @@ RUN pip install --no-cache-dir -r /home/$LOCAL_USERNAME/requirements.txt
 # Register Jupyter kernel for ROS Humble Python
 RUN python3 -m ipykernel install --user --name=ros-humble-kernel --display-name "ROS 2 Humble Python"
 
+# 例: Dockerfile の適切な位置
 RUN mkdir -p /home/$LOCAL_USERNAME/.jupyter/lab/user-settings/@jupyterlab/apputils-extension && \
-    echo '{ "theme": "JupyterLab Dark" }' > /home/$LOCAL_USERNAME/.jupyter/lab/user-settings/@jupyterlab/apputils-extension/themes.jupyterlab-settings
+    echo '{ "theme": "JupyterLab Dark" }' > /home/$LOCAL_USERNAME/.jupyter/lab/user-settings/@jupyterlab/apputils-extension/themes.jupyterlab-settings && \
+    jupyter lab build && \
+    chown -R $UID:$GID /home/$LOCAL_USERNAME/.jupyter
 
 RUN set -x \
     && apt-get update \
@@ -98,3 +102,9 @@ RUN mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 RUN echo "eval \$(starship init bash)" >> ~/.bashrc
 RUN echo 'eval $(keychain --eval --agents ssh $SSH_KEY)' >> ~/.bashrc
+
+
+ENV LANG=ja_JP.UTF-8 \
+    LANGUAGE=ja_JP.UTF-8 \
+    LC_ALL=ja_JP.UTF-8 \
+    TZ=Asia/Tokyo
