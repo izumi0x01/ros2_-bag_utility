@@ -1,59 +1,37 @@
-# ---------------------------------------------------
-# ✅ BASE
-FROM ubuntu:22.04
+# ベースイメージの指定
+FROM ros:humble
+SHELL ["/bin/bash", "-c"]
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Tokyo
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
-# ---------------------------------------------------
-# ✅ Basic tools & Python
-RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y \
-    git \
-    python3.10 \
-    python3.10-venv \
-    python3-pip \
-    vim \
-    curl \
-    lsb-release \
-    gnupg2 \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     locales \
     sudo \
-    software-properties-common \
-    x11-apps
+    x11-apps \
+    curl \
+    vim \
+    sudo\
+    python3-pip \
+    python3-colcon-argcomplete \
+    python3-colcon-common-extensions \
+    ros-humble-ros-base \
+    ros-humble-ros2bag \
+    ros-humble-rosbag2-storage-default-plugins \
+    ros-humble-rqt-py-common \
+    && rm -rf /var/lib/apt/lists/* 
 
-RUN locale-gen en_US en_US.UTF-8 && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 
-# ---------------------------------------------------
-# ✅ ユーザー作成
 ARG UID GID LOCAL_USERNAME LOCAL_GROUPNAME
 RUN groupadd -g $GID $LOCAL_GROUPNAME && \
     useradd -m -u $UID -g $GID $LOCAL_USERNAME && \
     usermod -aG sudo $LOCAL_USERNAME && \
-    echo "$LOCAL_USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+    echo "$LOCAL_USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers &&\
+    chmod 0440 /etc/sudoers
 
-# ---------------------------------------------------
-# ✅ ROS 2 Humble Install
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2.list
 
-RUN apt update && apt install -y ros-humble-desktop python3-colcon-common-extensions
-
-# ---------------------------------------------------
-# ✅ ROS 2 必須パッケージ
-RUN apt-get update && apt-get install -y \
-    ros-humble-rosbag2-storage-default-plugins \
-    ros-humble-ros-base \
-    ros-humble-ros2bag \
-    ros-humble-rosbag2-transport \
-    ros-humble-rosbag2-storage-mcap \
-    ros-humble-rosbridge-suite \
-    ros-humble-rqt-py-common
-
-# ---------------------------------------------------
-# ✅ Python パッケージを【ROS 2 のシステム Python で】インストール
 RUN python3 -m pip install --upgrade pip setuptools && \
     python3 -m pip install \
     jupyterlab \
@@ -70,31 +48,38 @@ RUN python3 -m pip install --upgrade pip setuptools && \
     ipywidgets \
     import-ipynb
 
-# ---------------------------------------------------
-# ✅ カーネルをシステム Python で登録
+
 RUN python3 -m ipykernel install --user --name=ros-humble-kernel --display-name "ROS 2 Humble Python"
+RUN curl -fsSL https://starship.rs/install.sh | sh -s -- --yes 
 
-# ---------------------------------------------------
-# ✅ ROS 2 source を global に
-RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc
 
-# ---------------------------------------------------
-# ✅ ワークスペース
+# ワークスペース
 ARG LOCAL_USERNAME
 ARG WS=/home/$LOCAL_USERNAME/dev_ws
 RUN mkdir -p $WS/src
 WORKDIR $WS
+USER $LOCAL_USERNAME:$LOCAL_GROUPNAME
 
-COPY ./requirements.txt $WS/requirements.txt
-RUN pip install -r $WS/requirements.txt || true
+# stop alert bell
+RUN touch ~/.inputrc && \
+    echo "# quit beep sound" >> ~/.inputrc && \
+    echo "set bell-style none" >> ~/.inputrc
 
-# ---------------------------------------------------
-# ✅ SSH known_hosts
-USER $LOCAL_USERNAME
+RUN mkdir -p /home/$LOCAL_USERNAME/dev_ws/src \
+    && source /opt/ros/humble/setup.bash \
+    && sudo apt-get update \
+    && if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then sudo rosdep init; fi \
+    && rosdep update \
+    && rosdep install --from-paths /home/$LOCAL_USERNAME/dev_ws/src --rosdistro humble -i -y \
+    && echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc 
+
+COPY requirements.txt /home/$LOCAL_USERNAME
+RUN pip install --upgrade pip && \
+    pip install --upgrade 'setuptools==58.0.0' && \
+    pip3 install --no-cache-dir -r /home/$LOCAL_USERNAME/requirements.txt
+
+RUN sudo apt-get update && sudo apt-get install -y \
+    openssh-client 
+
 RUN mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-
-# ---------------------------------------------------
-# ✅ デフォルトで bash をシェルに
-SHELL ["/bin/bash", "-c"]
-
+RUN echo "eval $(starship init bash)" >> ~/.bashrc
