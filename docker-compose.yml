@@ -1,17 +1,15 @@
-version: '3'
+version: "3"
 services:
   jupyter:
     build:
       context: .
       dockerfile: Dockerfile_basic
       args:
-        - UID=${UID}
-        - GID=${GID}
-        - LOCAL_USERNAME=${LOCAL_USERNAME}
-        - LOCAL_GROUPNAME=${LOCAL_GROUPNAME}
-        - PASSWORD=${PASSWORD}
-        - PORT=${DEFAULT_PORT}
-    user: "${UID}:${GID}"          # ここでUIDとGIDを指定してユーザ切替
+        UID: ${UID}
+        GID: ${GID}
+        LOCAL_USERNAME: ${LOCAL_USERNAME}
+        LOCAL_GROUPNAME: ${LOCAL_GROUPNAME}
+    user: "${UID}:${GID}"
     ipc: host
     network_mode: host
     privileged: true
@@ -28,17 +26,18 @@ services:
     volumes:
       - .:/home/${LOCAL_USERNAME}/dev_ws
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - $SSH_AUTH_SOCK:/ssh-agent  # ssh-agentのソケットをコンテナに共有  
+      - $SSH_AUTH_SOCK:/ssh-agent
     entrypoint: >
-      jupyter-lab
+      bash -c "source /opt/ros/humble/setup.bash &&
+      jupyter lab
       --ip=0.0.0.0
       --no-browser
       --allow-root
       --port=${DEFAULT_PORT}
-      --ServerApp.token='$PASSWORD'
+      --ServerApp.token=''
       --ServerApp.password=''
       --notebook-dir=/home/${LOCAL_USERNAME}/dev_ws
-      --FileContentsManager.delete_to_trash=False
+      --FileContentsManager.delete_to_trash=False"
 
   jupyter-gpu:
     build:
@@ -51,7 +50,7 @@ services:
         - LOCAL_GROUPNAME=${LOCAL_GROUPNAME}
         - PASSWORD=${PASSWORD}
         - PORT=${GPU_PORT}
-    user: "${UID}:${GID}"          # ここでUIDとGIDを指定してユーザ切替
+    user: "${UID}:${GID}" # ここでUIDとGIDを指定してユーザ切替
     ipc: host
     network_mode: host
     privileged: true
@@ -76,7 +75,7 @@ services:
     volumes:
       - .:/home/${LOCAL_USERNAME}/dev_ws
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - $SSH_AUTH_SOCK:/ssh-agent  # ssh-agentのソケットをコンテナに共有  
+      - $SSH_AUTH_SOCK:/ssh-agent # ssh-agentのソケットをコンテナに共有
     entrypoint: >
       jupyter-lab
       --ip=0.0.0.0

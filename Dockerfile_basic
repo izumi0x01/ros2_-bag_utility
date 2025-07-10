@@ -1,105 +1,100 @@
-# ベースイメージ
+# ---------------------------------------------------
+# ✅ BASE
 FROM ubuntu:22.04
 
-# 環境設定
-ENV LIBRARY_PATH=/usr/local/cuda/lib64/stubs
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Tokyo
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
-# パッケージ更新
-RUN apt-get update && apt-get upgrade -y
-
-# 基本ツールとPython環境のインストール
-RUN apt-get install -y \
+# ---------------------------------------------------
+# ✅ Basic tools & Python
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y \
     git \
-    python3.9 \
+    python3.10 \
+    python3.10-venv \
     python3-pip \
     vim \
     curl \
     lsb-release \
     gnupg2 \
     locales \
-    software-properties-common
+    sudo \
+    software-properties-common \
+    x11-apps
 
-# ロケールの設定
 RUN locale-gen en_US en_US.UTF-8 && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
-ENV LANG=en_US.UTF-8
-ENV LC_ALL=en_US.UTF-8
 
-# GUIアプリケーション用ライブラリ（任意）
-RUN apt-get install -y x11-apps
-
-# ユーザーとグループの作成
-ARG UID GID LOCAL_USERNAME LOCAL_GROUPNAME PASSWORD PORT
+# ---------------------------------------------------
+# ✅ ユーザー作成
+ARG UID GID LOCAL_USERNAME LOCAL_GROUPNAME
 RUN groupadd -g $GID $LOCAL_GROUPNAME && \
-    useradd -m -u $UID -g $GID $LOCAL_USERNAME
+    useradd -m -u $UID -g $GID $LOCAL_USERNAME && \
+    usermod -aG sudo $LOCAL_USERNAME && \
+    echo "$LOCAL_USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# ROS 2 GPGキーとAPTリポジトリ追加
+# ---------------------------------------------------
+# ✅ ROS 2 Humble Install
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2.list
 
-# ROS 2 のインストール
-RUN apt update && apt install -y ros-humble-desktop
+RUN apt update && apt install -y ros-humble-desktop python3-colcon-common-extensions
 
-# ROS 2 環境設定
-RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc
-
-# PythonパッケージとJupyter Labのインストール
-COPY requirements.txt /tmp/requirements.txt
-
-RUN pip3 install --upgrade pip setuptools && \
-    pip3 install --no-cache-dir \
-        black \
-        jupyterlab \
-        jupyterlab-lsp \
-        'python-lsp-server[all]' \
-        lckr-jupyterlab-variableinspector \
-        jupyterlab_code_formatter \
-        jupyterlab-git \
-        jupyterlab_widgets \
-        ipywidgets \
-        import-ipynb && \
-    pip3 install --no-cache-dir -r /tmp/requirements.txt
-
-# ワークスペース作成と作業ディレクトリ設定
-ARG WS=/home/$LOCAL_USERNAME/dev_ws
-RUN mkdir -p $WS/src
-WORKDIR $WS
-
-# ROS 2 ワークスペース用依存パッケージ
-RUN apt install -y python3-colcon-common-extensions
-
-# keychain インストール
-RUN apt update
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
- && apt-get install -y keychain nodejs 
-
-# ~/.bashrc や ~/.bash_profile に追記
-ARG SSH_KEY
-RUN echo 'eval $(keychain --eval --agents ssh $SSH_KEY)' >> ~/.bashrc
-
-# 必要なパッケージのインストール
+# ---------------------------------------------------
+# ✅ ROS 2 必須パッケージ
 RUN apt-get update && apt-get install -y \
     ros-humble-rosbag2-storage-default-plugins \
     ros-humble-ros-base \
     ros-humble-ros2bag \
     ros-humble-rosbag2-transport \
     ros-humble-rosbag2-storage-mcap \
-    ros-humble-desktop \
-    python3-colcon-common-extensions \
     ros-humble-rosbridge-suite \
-    && rm -rf /var/lib/apt/lists/*
+    ros-humble-rqt-py-common
 
-RUN apt-get update && apt-get install -y \
-    ros-humble-rqt-py-common \
-    && rm -rf /var/lib/apt/lists/*
-
-# Pythonの依存関係をインストール
-RUN pip3 install --no-cache-dir \
+# ---------------------------------------------------
+# ✅ Python パッケージを【ROS 2 のシステム Python で】インストール
+RUN python3 -m pip install --upgrade pip setuptools && \
+    python3 -m pip install \
+    jupyterlab \
+    ipykernel \
     pandas \
-    matplotlib
+    matplotlib \
+    black \
+    jupyterlab-lsp \
+    'python-lsp-server[all]' \
+    lckr-jupyterlab-variableinspector \
+    jupyterlab_code_formatter \
+    jupyterlab-git \
+    jupyterlab_widgets \
+    ipywidgets \
+    import-ipynb
 
-# ユーザー切り替え
+# ---------------------------------------------------
+# ✅ カーネルをシステム Python で登録
+RUN python3 -m ipykernel install --user --name=ros-humble-kernel --display-name "ROS 2 Humble Python"
+
+# ---------------------------------------------------
+# ✅ ROS 2 source を global に
+RUN echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc
+
+# ---------------------------------------------------
+# ✅ ワークスペース
+ARG LOCAL_USERNAME
+ARG WS=/home/$LOCAL_USERNAME/dev_ws
+RUN mkdir -p $WS/src
+WORKDIR $WS
+
+COPY ./requirements.txt $WS/requirements.txt
+RUN pip install -r $WS/requirements.txt || true
+
+# ---------------------------------------------------
+# ✅ SSH known_hosts
 USER $LOCAL_USERNAME
-RUN mkdir -p ~/.ssh && \
-    ssh-keyscan github.com >> ~/.ssh/known_hosts
+RUN mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+
+# ---------------------------------------------------
+# ✅ デフォルトで bash をシェルに
+SHELL ["/bin/bash", "-c"]
+
