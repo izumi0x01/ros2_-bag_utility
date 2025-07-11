@@ -9,6 +9,8 @@ services:
         GID: ${GID}
         LOCAL_USERNAME: ${LOCAL_USERNAME}
         LOCAL_GROUPNAME: ${LOCAL_GROUPNAME}
+    cpus: 6.0           
+    cpu_shares: 1024    
     user: "${UID}:${GID}"
     ipc: host
     network_mode: host
@@ -49,6 +51,8 @@ services:
         - PASSWORD=${PASSWORD}
         - PORT=${GPU_PORT}
     user: "${UID}:${GID}" # ここでUIDとGIDを指定してユーザ切替
+    cpus: 6.0           
+    cpu_shares: 1024    
     ipc: host
     network_mode: host
     privileged: true

@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     vim \
+    tree \
     python3-pip \
     python3-colcon-argcomplete \
     ros-humble-ros2bag \
@@ -95,6 +96,7 @@ RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 RUN echo "eval \$(starship init bash)" >> ~/.bashrc
 RUN echo 'eval $(keychain --eval --agents ssh $SSH_KEY)' >> ~/.bashrc
 
+RUN sudo apt-get update && sudo apt-get install -y tree
 
 ENV LANG=ja_JP.UTF-8 \
     LANGUAGE=ja_JP.UTF-8 \
