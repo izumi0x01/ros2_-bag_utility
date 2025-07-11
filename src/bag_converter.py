@@ -3,7 +3,6 @@ import sqlite3
 import message_converter
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
-from rclpy.serialization import deserialize_message
 import pandas as pd
 import time
 
@@ -21,11 +20,11 @@ class BagConverter:
         self.conn = sqlite3.connect(bag_file)
         self.cursor = self.conn.cursor()
 
-    def closeDB(self):
+    def _closeDB(self):
         if self.conn is not None:
             self.conn.close()
 
-    def __flatten_dict(self, d, parent_key='', sep='_'):
+    def __flatten_dict(self, d, parent_key='', sep='/'):
         """
         unfold sub-structs, except struct array
         """
@@ -37,7 +36,7 @@ class BagConverter:
                 items.extend(self.__flatten_dict(val, new_key, sep=sep).items())
             elif isinstance(val, list):
                 for val_i in val:
-                    items.append((new_key + '_' + str(i), val_i))
+                    items.append((new_key + '/' + str(i), val_i))
                     i += 1
             else:
                 items.append((new_key, val))
@@ -45,45 +44,42 @@ class BagConverter:
         return dict(items) 
     
     def _extractDataFromDB(self):
-
-        self.cursor.execute('SELECT * from({})'.format('topics'))
-        topicRecords = self.cursor.fetchall()
-        self.cursor.execute('SELECT * from({})'.format('messages'))
-        messageRecords = self.cursor.fetchall()
-        
         topicDict = {}
-        for topic_row in topicRecords:    
-            topicID = topic_row[0]
-            topicName = topic_row[1]
-            topicType = topic_row[2]
 
+        # Prepare topics
+        self.cursor.execute('SELECT id, name, type FROM topics')
+        topicRecords = self.cursor.fetchall()
+
+        for topicID, topicName, topicType in topicRecords:
+            topicTypeClassName = get_message(topicType)  # ✅ 外に出す
+
+            # ✅ SQL で絞る
+            self.cursor.execute('SELECT id, topic_id, timestamp, data FROM messages WHERE topic_id = ?', (topicID,))
+            messageRecords = self.cursor.fetchall()
+
+            if not messageRecords:
+                continue
+
+            zeroIndexTimeStamp = messageRecords[0][2]
 
             dataList = []
-            for message_row in messageRecords:
-                topicTypeClassName = get_message(topicType)
-                rowDatas = message_row[3]
-                messageID = message_row[1]
-                timeStamps = message_row[2]
-                
-                if messageID != topicID:
-                    continue
-
+            for _, _, timeStamps, rowDatas in messageRecords:
                 try:
-                  deserializedRowData = deserialize_message(rowDatas, topicTypeClassName)
-                  rowDataDic = message_converter.convert_ros_message_to_dictionary(deserializedRowData)
-                  flattenDict = self.__flatten_dict(rowDataDic)
-                  _tmpDict = {}
-                  _tmpDict['row_time'] = self._calcDataTime(timeStamps)
-                  _tmpDict['msec'] = self._calcMilliSeconds(timeStamps, messageRecords[0][2])
-                  _tmpDict.update(flattenDict)
-                  dataList.append(_tmpDict)
+                    deserialized = deserialize_message(rowDatas, topicTypeClassName)
+                    rowDataDic = message_converter.convert_ros_message_to_dictionary(deserialized)
+                    flattenDict = self.__flatten_dict(rowDataDic)
+
+                    _tmpDict = {
+                        'row_time': self._calcDataTime(timeStamps),
+                        'msec': self._calcMilliSeconds(timeStamps, zeroIndexTimeStamp),
+                    }
+                    _tmpDict.update(flattenDict)
+                    dataList.append(_tmpDict)
 
                 except Exception as e:
-                  continue  
+                    continue
 
-            _topicName = str(topicName)
-            topicDict[_topicName] =  dataList
-
+            topicDict[str(topicName)] = dataList
         return topicDict
     
     def _calcDataTime(self, timeStamps):
@@ -99,6 +95,39 @@ class BagConverter:
         return (timeStamps - zeroIndexTimeStamp) / 1000000
         
 
+    def getAllTopicNameAndMessageType(self):
+        """
+        DB に含まれるすべてのトピックについて、
+        最初の 1 件目の message の flatten keys を表示する
+        """
+        # すべての topic 名取得
+        self.cursor.execute('SELECT name, id, type FROM topics')
+        records = self.cursor.fetchall()
+        if not records:
+            print("No topics found")
+            return
+
+        for topic_name, topicID, topicType in records:
+            topicTypeClassName = get_message(topicType)
+
+            # 先頭 1 件
+            self.cursor.execute('SELECT data FROM messages WHERE topic_id = ? LIMIT 1', (topicID,))
+            row = self.cursor.fetchone()
+            if not row:
+                print(f"{topic_name}: No message data found")
+                continue
+
+            rowDatas = row[0]
+            deserialized = deserialize_message(rowDatas, topicTypeClassName)
+            rowDataDic = message_converter.convert_ros_message_to_dictionary(deserialized)
+            flattenDict = self.__flatten_dict(rowDataDic)
+
+            print(f"{topic_name}:")
+            for key in flattenDict.keys():
+                print(f"  - {key}")
+
+
+    
     def getTopicDataWithPandas(self, topicName):
         topicDict = self._extractDataFromDB()
         if topicName in topicDict.keys():
@@ -107,5 +136,6 @@ class BagConverter:
         else:
             print("Topic not found")
             exit(1)
+        self._closeDB()
 
 

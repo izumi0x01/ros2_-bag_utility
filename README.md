@@ -1,26 +1,58 @@
+# TL;DR
+
 bagファイルのデータを取り出して，pandasのデータフレーム型で取りだすユーティリティです．
+jupyter lab上でデータを扱うことを想定しています．
+
+- jupyter lab 環境でターミナルを開き，`jupyter lab`上でros2 bagができます
+  - ブラウザのターミナル上からbagフォルダ内部に記録してください
+  - プロジェクトルートはローカルフォルダとマウントしているため，bagファイルの喪失の可能性がありません
+  - 念の為，**記録したバグファイルのbackupを定期的に取ること**をおすすめします
+- サンプルコードとしてsrcフォルダ内部に`plot.ipynb`があります．
+  - bagfileをpandas形式で読み出します
+  - bagフォルダ内に記録したbagファイルをそのまま利用可能です
+  - csvに書き出す必要がないため，便利です．長尺のbagファイルだと読み込みに時間がかかるかもしれません．
+
 
 # set up
 
-docker composeでjupyter labの仮想環境を立ち上げる。どちらか一つを選択します
+docker composeでjupyter labの仮想環境を立ち上げます．
+adamsなどすでにdocker環境が立ち上がっているPCに導入した後，リモートでアクセスすることを想定します．
+sshでアクセスして，サーバを立ち上げてください．
 
--  簡単に実行する場合
+-  CPUのみで実行する場合
 ```
+docker compose build jupyter
 docker compose up jupyter
 ```
 
 - gpuの実行環境が整っている場合
 ```
-docker compose up jupyter_gpu
+docker compose build jupyter-gpu
+docker compose up jupyter-gpu
 ```
 
-gpuのset_upの方法はnotionページ参照
+gpuのset_upの方法は研究室のnotionページ参照
 
 [nvidia driverのインストール](https://www.notion.so/Jupyter-Lab-c7c0895e101b464c94d23811da65e479)
 
-- portを指定したい場合(例:7000番)は以下のとおり
+- ブラウザで以下のポートにアクセスして操作してください．
+```
+(upyterの場合) localhost:8888
+(upyter-gpuの場合) localhost:8899
+```
+
+その後，パスワードとして`pass`を一番上のフォームに入力します．
+カスタマイズするには，`.env`ファイルを編集してください
+
+
+- 簡易的にportを指定して立ち上げたい場合(例:7000番)は以下のとおり
 ```
 PORT=7000 docker compose up jupyter
+```
+
+- ※サーバを高速に落とすには以下のオプションを選択すると便利です
+```
+docker compose down --timeout 0
 ```
 
 # how to use
@@ -28,20 +60,26 @@ PORT=7000 docker compose up jupyter
 ```converter.py
 # bag_converterクラスをインポート
 import bag_converter
-
-# bag_fileには記録したバグファイルを指定してください
-bag_converter.connectDB(bag_file)
+```
+```
+# bag_fileには記録したバグファイルを指定して,DBにアクセスします
+path = 'bagfilepath'
+bag_converter.connectDB(path)
+```
+```
+# 記録したバグファイルのTopic名とメッセージタイプは以下のコマンドで全て確認できます
+# bag_converter.getAllMessageNameAndTopicType()
+```
+```
 # .bagファイルから"/topicname"で指定したバグデータを取得
-#　dfで取り出される．
+#　dfで取り出されます．
 df = bag_converter.getTopicDataWithPandas("/topicname")
-bag_converter.closeDB()
+```
+```
+# "/"区切りでメッセージを確認します
+df["topic/message/type"].numpy()
 ```
 
-# 問題,今後の改良
-.devcontainerで作業をしようとするとpathのインクルードがうまくいきません。
-- /workspaceを作業フォルダに指定していますが、実行時に$PYTHONPATH環境変数に追加されないため、sys.append.path("/workspace")のように指定する必要があるます。
-- path="/bag/..."のようにbagファイルを指定しても動きません。path="/workspace/bag..."のように指定する必要があります。
 
-
-# refer from
+# refer to
 https://github.com/fishros/ros2bag_convert
