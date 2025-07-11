@@ -28,14 +28,14 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - $SSH_AUTH_SOCK:/ssh-agent
     entrypoint: >
-      /usr/bin/python3 -m jupyter lab
+      bash -c "source /opt/ros/humble/setup.bash && /usr/bin/python3 -m jupyter lab
       --ip=0.0.0.0
       --no-browser
       --allow-root
       --port=${DEFAULT_PORT}
       --ServerApp.token=${PASSWORD}
       --notebook-dir=/home/${LOCAL_USERNAME}/dev_ws
-      --FileContentsManager.delete_to_trash=False
+      --FileContentsManager.delete_to_trash=False"
 
   jupyter-gpu:
     build:
@@ -75,11 +75,11 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - $SSH_AUTH_SOCK:/ssh-agent # ssh-agentのソケットをコンテナに共有
     entrypoint: >
-      /usr/bin/python3 -m jupyter lab
+      bash -c "source /opt/ros/humble/setup.bash && /usr/bin/python3 -m jupyter lab
       --ip=0.0.0.0
       --no-browser
       --allow-root
       --port=${GPU_PORT}
       --ServerApp.token=${PASSWORD}
       --notebook-dir=/home/${LOCAL_USERNAME}/dev_ws
-      --FileContentsManager.delete_to_trash=False
+      --FileContentsManager.delete_to_trash=False"
