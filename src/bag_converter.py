@@ -66,42 +66,30 @@ class BagConverter:
         path = self._get_topic_cache_path(topic_name, ext)
         if not os.path.exists(path):
             return None
-
+    
         if ext == "feather":
             return pd.read_feather(path)
-        elif ext == "json":
-            with open(path, "r") as f:
-                return json.load(f)
+        elif ext == "csv":
+            return pd.read_csv(path)
         else:
             raise ValueError("Unsupported cache extension")
-
+    
     def saveCache(self, data, ext="feather"):
-        """
-        トピックごとに feather, json, csv で個別保存
-        - 保存先: bagファイルと同じフォルダ
-        - ファイル名: トピック名を整形して使用（例: /sg/pressure → pressure.feather, pressure.csv）
-        """
         save_dir = os.path.dirname(self.bag_file)
     
         for topic_name, records in data.items():
-            base_filename = self._sanitize_topic_name(topic_name)
-            df = pd.DataFrame(records)
+            filename = self._sanitize_topic_name(topic_name) + f".{ext}"
+            path = os.path.join(save_dir, filename)
     
-            if ext == "feather" or ext == "all":
-                feather_path = os.path.join(save_dir, base_filename + ".feather")
-                df.to_feather(feather_path)
-                print(f"[INFO] Saved feather to {feather_path}")
-    
-            if ext == "csv" or ext == "all":
-                csv_path = os.path.join(save_dir, base_filename + ".csv")
-                df.to_csv(csv_path, index=False)
-                print(f"[INFO] Saved CSV to {csv_path}")
-    
-            if ext == "json" or ext == "all":
-                json_path = os.path.join(save_dir, base_filename + ".json")
-                with open(json_path, "w") as f:
-                    json.dump(records, f, ensure_ascii=False, indent=2)
-                print(f"[INFO] Saved JSON to {json_path}")
+            if ext == "feather":
+                df = pd.DataFrame(records)
+                df.to_feather(path)
+            elif ext == "csv":
+                df = pd.DataFrame(records)
+                df.to_csv(path, index=False)
+            else:
+                raise ValueError("Unsupported cache extension")
+
 
     def _extractDataFromDB(self):
         topicDict = {}
@@ -166,28 +154,26 @@ class BagConverter:
             print(f"{topic_name}:")
             for key in flattenDict.keys():
                 print(f"  - {key}")
-                    
+
     def getTopicDataWithPandas(self, topic_name, use_cache=True, cache_ext="feather"):
         if self.bag_file is None:
             print("Please connect to bag DB first via connectDB()")
             return None
-    
+
         if use_cache:
             cached_df = self.loadCache(topic_name, cache_ext)
             if cached_df is not None:
                 print(f"[INFO] Loaded cache for topic '{topic_name}' from {self._get_topic_cache_path(topic_name, cache_ext)}")
                 return cached_df
-    
+
         self.connectDB(self.bag_file)
         topicDict = self._extractDataFromDB()
         self._closeDB()
-    
+
         if topic_name not in topicDict:
             print(f"[ERROR] Topic '{topic_name}' not found in bag")
             sys.exit(1)
-    
-        # キャッシュ保存を有効化
-        self.saveCache({topic_name: topicDict[topic_name]}, ext=cache_ext)
-    
+
+        self.saveCache(topicDict, cache_ext)
         df = pd.DataFrame(topicDict[topic_name])
         return df

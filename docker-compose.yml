@@ -9,6 +9,8 @@ services:
         GID: ${GID}
         LOCAL_USERNAME: ${LOCAL_USERNAME}
         LOCAL_GROUPNAME: ${LOCAL_GROUPNAME}
+    cpus: 6.0           # 最大4CPUコアを使う
+    cpu_shares: 1024    # CPUスケジューリング優先度（デフォルト1024）
     user: "${UID}:${GID}"
     ipc: host
     network_mode: host
