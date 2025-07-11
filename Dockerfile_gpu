@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     x11-apps \
     curl \
     vim \
+    tree \
     python3-pip \
     openssh-client \
     keychain \
