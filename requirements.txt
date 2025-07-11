@@ -21,7 +21,7 @@ pyQt5
 # optuna
 #optuna
 #cmaes
-cython
+tqdm
 pyarrow
 
 # requirements.txt

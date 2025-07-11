@@ -7,7 +7,7 @@ import pandas as pd
 import message_converter
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
-
+from tqdm import tqdm
 
 class BagConverter:
     def __init__(self):
@@ -93,13 +93,13 @@ class BagConverter:
 
     def _extractDataFromDB(self):
         topicDict = {}
-
+    
         self.cursor.execute('SELECT id, name, type FROM topics')
         topicRecords = self.cursor.fetchall()
-
+    
         for topicID, topicName, topicType in topicRecords:
             topicTypeClassName = get_message(topicType)
-
+    
             self.cursor.execute(
                 'SELECT id, topic_id, timestamp, data FROM messages WHERE topic_id = ?',
                 (topicID,)
@@ -107,16 +107,17 @@ class BagConverter:
             messageRecords = self.cursor.fetchall()
             if not messageRecords:
                 continue
-
+    
             zeroIndexTimeStamp = messageRecords[0][2]
-
+    
             dataList = []
-            for _, _, timeStamps, rowDatas in messageRecords:
+            print(f"[INFO] Deserializing topic: {topicName} ({len(messageRecords)} messages)")
+            for _, _, timeStamps, rowDatas in tqdm(messageRecords, desc=f"  Progress [{topicName}]", unit="msg"):
                 try:
                     deserialized = deserialize_message(rowDatas, topicTypeClassName)
                     rowDataDic = message_converter.convert_ros_message_to_dictionary(deserialized)
                     flattenDict = self.__flatten_dict(rowDataDic)
-
+    
                     _tmpDict = {
                         'row_time': self._calcDataTime(timeStamps),
                         'msec': self._calcMilliSeconds(timeStamps, zeroIndexTimeStamp),
@@ -126,9 +127,9 @@ class BagConverter:
                 except Exception as e:
                     print(f"[WARN] Failed to deserialize message on topic '{topicName}': {e}")
                     continue
-
+    
             topicDict[str(topicName)] = dataList
-
+    
         return topicDict
 
     def getAllTopicNameAndMessageType(self):
