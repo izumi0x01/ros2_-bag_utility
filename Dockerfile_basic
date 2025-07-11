@@ -1,0 +1,102 @@
+# define the base as ROS Humble Docker image
+FROM ros:humble
+
+SHELL ["/bin/bash", "-c"]
+
+# non-interactive frontend for apt-get
+ENV DEBIAN_FRONTEND=noninteractive
+
+# install apt-utils and necessary packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    locales \
+    tzdata \
+    sudo \
+    x11-apps \
+    git \
+    curl \
+    vim \
+    python3-pip \
+    python3-colcon-argcomplete \
+    ros-humble-ros2bag \
+    ros-humble-rosbag2-storage-default-plugins \
+    ros-humble-rqt-py-common \
+    openssh-client \
+    keychain \
+    && rm -rf /var/lib/apt/lists/* 
+
+# set timezone to Asia/Tokyo
+ENV TZ=Asia/Tokyo
+RUN ln -fs /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
+
+# set locale to Japanese UTF-8
+RUN locale-gen ja_JP.UTF-8 && \
+    update-locale LANG=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x  | bash - \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# make user as non-root and set up sudo
+ARG UID GID LOCAL_USERNAME LOCAL_GROUPNAME SSH_KEY
+RUN groupadd -g $GID $LOCAL_GROUPNAME && \
+    useradd -m -u $UID -g $GID $LOCAL_USERNAME && \
+    usermod -aG sudo $LOCAL_USERNAME && \
+    echo "$LOCAL_USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    chmod 0440 /etc/sudoers
+
+# Setup workspace and switch to user
+ARG WS=/home/$LOCAL_USERNAME/dev_ws
+RUN mkdir -p $WS/src
+
+# Install starship prompt
+RUN curl -fsSL https://starship.rs/install.sh | sh -s -- --yes
+
+# Upgrade pip and setuptools
+RUN python3 -m pip install --upgrade pip 'setuptools==58.0.0' 
+
+# Setup rosdep and install dependencies
+RUN sudo apt-get update && \
+    if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then sudo rosdep init; fi && \
+    rosdep update && \
+    rosdep install --from-paths $WS/src --rosdistro humble -i -y 
+
+# Copy requirements.txt and install python packages
+COPY requirements.txt /home/$LOCAL_USERNAME/
+RUN pip install --no-cache-dir -r /home/$LOCAL_USERNAME/requirements.txt
+
+# Register Jupyter kernel for ROS Humble Python
+RUN python3 -m ipykernel install --user --name=ros-humble-kernel --display-name "ROS 2 Humble Python"
+
+
+# 例: Dockerfile の適切な位置
+RUN mkdir -p /home/$LOCAL_USERNAME/.jupyter/lab/user-settings/@jupyterlab/apputils-extension && \
+    echo '{ "theme": "JupyterLab Dark" }' > /home/$LOCAL_USERNAME/.jupyter/lab/user-settings/@jupyterlab/apputils-extension/themes.jupyterlab-settings && \
+    jupyter lab build && \
+    chown -R $UID:$GID /home/$LOCAL_USERNAME/.jupyter
+
+RUN set -x \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+    language-pack-ja-base \
+    fonts-noto-cjk \
+    && /usr/sbin/update-locale LANG=ja_JP.UTF-8 LANGUAGE="ja_JP:ja" \
+    && ln -sf /usr/share/zoneinfo/Asia/Tokyo /etc/localtime \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR $WS
+USER $LOCAL_USERNAME:$LOCAL_GROUPNAME
+
+# Setup ssh known_hosts for github
+RUN mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+RUN echo "eval \$(starship init bash)" >> ~/.bashrc
+RUN echo 'eval $(keychain --eval --agents ssh $SSH_KEY)' >> ~/.bashrc
+
+
+ENV LANG=ja_JP.UTF-8 \
+    LANGUAGE=ja_JP.UTF-8 \
+    LC_ALL=ja_JP.UTF-8 \
+    TZ=Asia/Tokyo

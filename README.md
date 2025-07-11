@@ -1,9 +1,27 @@
 bagファイルのデータを取り出して，pandasのデータフレーム型で取りだすユーティリティです．
 
-# requirement
+# set up
 
-1. ローカルに直接colconの実行環境を作成する。
-2. 環境を汚したくない場合は.devcontainerで実行してください。
+docker composeでjupyter labの仮想環境を立ち上げる。どちらか一つを選択します
+
+-  簡単に実行する場合
+```
+docker compose up jupyter
+```
+
+- gpuの実行環境が整っている場合
+```
+docker compose up jupyter_gpu
+```
+
+gpuのset_upの方法はnotionページ参照
+
+[nvidia driverのインストール](https://www.notion.so/Jupyter-Lab-c7c0895e101b464c94d23811da65e479)
+
+- portを指定したい場合(例:7000番)は以下のとおり
+```
+PORT=7000 docker compose up jupyter
+```
 
 # how to use
 

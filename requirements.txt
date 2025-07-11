@@ -1,12 +1,10 @@
 # basic libraries for ros2
 numpy<2.0 # downgrade for rqt plugin
 scipy
-pandas
 opencv-python
 rosbags
 
 # for rqt plot
-matplotlib
 pyqtgraph
 pyQt5
 
@@ -23,3 +21,29 @@ pyQt5
 # optuna
 #optuna
 #cmaes
+
+# requirements.txt
+
+# Jupyter
+jupyterlab
+ipykernel
+
+# 科学計算
+pandas
+matplotlib
+
+# フォーマッタ
+black
+
+# Jupyter Lab 拡張
+jupyterlab-lsp
+python-lsp-server[all]
+lckr-jupyterlab-variableinspector
+jupyterlab_code_formatter
+jupyterlab-git
+jupyterlab_widgets
+ipywidgets
+jupyterlab-language-pack-ja-JP
+
+# import-ipynb support
+import-ipynb
