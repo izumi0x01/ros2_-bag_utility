@@ -12,6 +12,9 @@ jupyter lab上でデータを扱うことを想定しています．
   - bagフォルダ内に記録したbagファイルをそのまま利用可能です
   - csvに書き出す必要がないため，便利です．長尺のbagファイルだと読み込みに時間がかかるかもしれません．
 
+<img src="result1.gif" width="400">
+
+<img src="result2.gif" width="400">
 
 # set up
 
