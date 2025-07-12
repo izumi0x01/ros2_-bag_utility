@@ -13,15 +13,17 @@ class BagConverter:
     def __init__(self):
         self.cursor = None
         self.conn = None
-        self.bag_file = None
+        self.bag_file_path = None
 
-    def connectDB(self, bag_file):
-        if not os.path.exists(bag_file):
-            print(f"Bag file not found: {bag_file}")
+    def connectDB(self, dirname):
+        bagfile_name = dirname.split("/")[-1]
+        bag_file_path = dirname + "/" + bagfile_name + "_0" + ".db3"
+        if not os.path.exists(bag_file_path):
+            print(f"Bag file not found: {bag_file_path}")
             return
 
-        self.bag_file = bag_file
-        self.conn = sqlite3.connect(bag_file)
+        self.bag_file_path = bag_file_path
+        self.conn = sqlite3.connect(bag_file_path)
         self.cursor = self.conn.cursor()
 
     def _closeDB(self):
@@ -60,27 +62,27 @@ class BagConverter:
 
     def _get_topic_cache_path(self, topic_name, ext):
         filename = self._sanitize_topic_name(topic_name) + f".{ext}"
-        return os.path.join(os.path.dirname(self.bag_file), filename)
+        return os.path.join(os.path.dirname(self.bag_file_path), filename)
 
     def loadCache(self, topic_name, ext="feather"):
         path = self._get_topic_cache_path(topic_name, ext)
         if not os.path.exists(path):
             return None
-    
+
         if ext == "feather":
             return pd.read_feather(path)
         elif ext == "csv":
             return pd.read_csv(path)
         else:
             raise ValueError("Unsupported cache extension")
-    
+
     def saveCache(self, data, ext="feather"):
-        save_dir = os.path.dirname(self.bag_file)
-    
+        save_dir = os.path.dirname(self.bag_file_path)
+
         for topic_name, records in data.items():
             filename = self._sanitize_topic_name(topic_name) + f".{ext}"
             path = os.path.join(save_dir, filename)
-    
+
             if ext == "feather":
                 df = pd.DataFrame(records)
                 df.to_feather(path)
@@ -90,16 +92,15 @@ class BagConverter:
             else:
                 raise ValueError("Unsupported cache extension")
 
-
     def _extractDataFromDB(self):
         topicDict = {}
-    
+
         self.cursor.execute('SELECT id, name, type FROM topics')
         topicRecords = self.cursor.fetchall()
-    
+
         for topicID, topicName, topicType in topicRecords:
             topicTypeClassName = get_message(topicType)
-    
+
             self.cursor.execute(
                 'SELECT id, topic_id, timestamp, data FROM messages WHERE topic_id = ?',
                 (topicID,)
@@ -107,9 +108,9 @@ class BagConverter:
             messageRecords = self.cursor.fetchall()
             if not messageRecords:
                 continue
-    
+
             zeroIndexTimeStamp = messageRecords[0][2]
-    
+
             dataList = []
             print(f"[INFO] Deserializing topic: {topicName} ({len(messageRecords)} messages)")
             for _, _, timeStamps, rowDatas in tqdm(messageRecords, desc=f"  Progress [{topicName}]", unit="msg"):
@@ -117,7 +118,7 @@ class BagConverter:
                     deserialized = deserialize_message(rowDatas, topicTypeClassName)
                     rowDataDic = message_converter.convert_ros_message_to_dictionary(deserialized)
                     flattenDict = self.__flatten_dict(rowDataDic)
-    
+
                     _tmpDict = {
                         'row_time': self._calcDataTime(timeStamps),
                         'msec': self._calcMilliSeconds(timeStamps, zeroIndexTimeStamp),
@@ -127,9 +128,9 @@ class BagConverter:
                 except Exception as e:
                     print(f"[WARN] Failed to deserialize message on topic '{topicName}': {e}")
                     continue
-    
+
             topicDict[str(topicName)] = dataList
-    
+
         return topicDict
 
     def getAllTopicNameAndMessageType(self):
@@ -157,7 +158,7 @@ class BagConverter:
                 print(f"  - {key}")
 
     def getTopicDataWithPandas(self, topic_name, use_cache=True, cache_ext="feather"):
-        if self.bag_file is None:
+        if self.bag_file_path is None:
             print("Please connect to bag DB first via connectDB()")
             return None
 
@@ -167,7 +168,6 @@ class BagConverter:
                 print(f"[INFO] Loaded cache for topic '{topic_name}' from {self._get_topic_cache_path(topic_name, cache_ext)}")
                 return cached_df
 
-        self.connectDB(self.bag_file)
         topicDict = self._extractDataFromDB()
         self._closeDB()
 
