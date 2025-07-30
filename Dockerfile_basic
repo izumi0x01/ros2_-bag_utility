@@ -90,11 +90,11 @@ WORKDIR $WS
 USER $LOCAL_USERNAME:$LOCAL_GROUPNAME
 
 # Setup ssh known_hosts for github
-RUN mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
+# RUN mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 RUN echo "eval \$(starship init bash)" >> ~/.bashrc
-RUN echo 'eval $(keychain --eval --agents ssh $SSH_KEY)' >> ~/.bashrc
+# RUN echo 'eval $(keychain --eval --agents ssh $SSH_KEY)' >> ~/.bashrc
 
 RUN sudo apt-get update && sudo apt-get install -y tree
 
